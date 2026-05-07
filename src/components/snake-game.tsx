@@ -74,7 +74,6 @@ export default function SnakeGame() {
 
   const [gameState, setGameState] = useState<GameState>('idle')
   const [score, setScore] = useState(0)
-  const [highScore, setHighScore] = useState(0)
   const [snake, setSnake] = useState<Position[]>([
     { x: 5, y: 10 },
     { x: 4, y: 10 },
