@@ -83,6 +83,11 @@ export default function SnakeGame() {
   const [bonusFood, setBonusFood] = useState<Position | null>(null)
   const [speed, setSpeed] = useState(INITIAL_SPEED)
 
+  // Refs for synchronous access inside game tick
+  const foodRef = useRef<Position>({ x: 15, y: 10 })
+  const bonusFoodRef = useRef<Position | null>(null)
+  const scoreRef = useRef(0)
+
   // Load high score from localStorage (lazy initializer)
   const [highScore, setHighScore] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -329,7 +334,7 @@ export default function SnakeGame() {
       if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
         setGameState('gameover')
         setHighScore((prev) => {
-          const newHigh = Math.max(prev, score)
+          const newHigh = Math.max(prev, scoreRef.current)
           localStorage.setItem('snake-high-score', String(newHigh))
           return newHigh
         })
@@ -340,7 +345,7 @@ export default function SnakeGame() {
       if (newSnake.some((s) => s.x === head.x && s.y === head.y)) {
         setGameState('gameover')
         setHighScore((prev) => {
-          const newHigh = Math.max(prev, score)
+          const newHigh = Math.max(prev, scoreRef.current)
           localStorage.setItem('snake-high-score', String(newHigh))
           return newHigh
         })
@@ -349,43 +354,46 @@ export default function SnakeGame() {
 
       newSnake.unshift(head)
 
-      // Check food
+      // Check food using refs for synchronous access
+      const currentFood = foodRef.current
+      const currentBonus = bonusFoodRef.current
       let ate = false
-      setFood((prevFood) => {
-        if (head.x === prevFood.x && head.y === prevFood.y) {
-          ate = true
-          return randomPosition(newSnake)
-        }
-        return prevFood
-      })
-
-      // Check bonus food
       let ateBonus = false
-      setBonusFood((prevBonus) => {
-        if (prevBonus && head.x === prevBonus.x && head.y === prevBonus.y) {
-          ateBonus = true
-          return null
-        }
-        return prevBonus
-      })
+
+      if (head.x === currentFood.x && head.y === currentFood.y) {
+        ate = true
+        const newFood = randomPosition(newSnake)
+        foodRef.current = newFood
+        setFood(newFood)
+      }
+
+      if (currentBonus && head.x === currentBonus.x && head.y === currentBonus.y) {
+        ateBonus = true
+        bonusFoodRef.current = null
+        setBonusFood(null)
+      }
 
       if (ate) {
-        setScore((prev) => prev + 10)
+        scoreRef.current += 10
+        setScore(scoreRef.current)
         setSpeed((prev) => Math.max(MIN_SPEED, prev - SPEED_INCREMENT))
 
         // Chance to spawn bonus
-        if (!bonusFood && Math.random() < 0.3) {
-          setBonusFood(randomPosition(newSnake))
+        if (!currentBonus && Math.random() < 0.3) {
+          const newBonus = randomPosition(newSnake)
+          bonusFoodRef.current = newBonus
+          setBonusFood(newBonus)
         }
       } else if (ateBonus) {
-        setScore((prev) => prev + 30)
+        scoreRef.current += 30
+        setScore(scoreRef.current)
       } else {
         newSnake.pop()
       }
 
       return newSnake
     })
-  }, [score, bonusFood])
+  }, [])
 
   // ─── Game Loop ─────────────────────────────────────────────────
   useEffect(() => {
@@ -406,10 +414,14 @@ export default function SnakeGame() {
       { x: 4, y: 10 },
       { x: 3, y: 10 },
     ]
+    const newFood = randomPosition(initialSnake)
     setSnake(initialSnake)
-    setFood(randomPosition(initialSnake))
+    setFood(newFood)
+    foodRef.current = newFood
     setBonusFood(null)
+    bonusFoodRef.current = null
     setScore(0)
+    scoreRef.current = 0
     setSpeed(INITIAL_SPEED)
     directionRef.current = 'RIGHT'
     nextDirectionRef.current = 'RIGHT'
