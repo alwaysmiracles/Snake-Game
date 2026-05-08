@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +64,29 @@ function getOpposite(dir: Direction): Direction {
   return map[dir]
 }
 
+// ─── High Score Store (useSyncExternalStore for hydration-safe localStorage) ──
+const HIGH_SCORE_KEY = 'snake-high-score'
+const highScoreListeners = new Set<() => void>()
+
+function subscribeHighScore(callback: () => void) {
+  highScoreListeners.add(callback)
+  return () => highScoreListeners.delete(callback)
+}
+
+function getHighScoreSnapshot(): number {
+  const saved = localStorage.getItem(HIGH_SCORE_KEY)
+  return saved ? parseInt(saved, 10) : 0
+}
+
+function getServerHighScoreSnapshot(): number {
+  return 0
+}
+
+function updateHighScore(value: number) {
+  localStorage.setItem(HIGH_SCORE_KEY, String(value))
+  highScoreListeners.forEach((l) => l())
+}
+
 // ─── Component ────────────────────────────────────────────────────
 export default function SnakeGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -87,15 +110,15 @@ export default function SnakeGame() {
   const foodRef = useRef<Position>({ x: 15, y: 10 })
   const bonusFoodRef = useRef<Position | null>(null)
   const scoreRef = useRef(0)
+  const highScoreRef = useRef(0)
 
-  // Load high score from localStorage (lazy initializer)
-  const [highScore, setHighScore] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('snake-high-score')
-      return saved ? parseInt(saved, 10) : 0
-    }
-    return 0
-  })
+  // High score via useSyncExternalStore (hydration-safe, no setState in effect)
+  const highScore = useSyncExternalStore(subscribeHighScore, getHighScoreSnapshot, getServerHighScoreSnapshot)
+
+  // Keep ref in sync with store value for use inside gameTick callbacks
+  useEffect(() => {
+    highScoreRef.current = highScore
+  }, [highScore])
 
   // ─── Draw Function ─────────────────────────────────────────────
   const draw = useCallback(
@@ -333,22 +356,14 @@ export default function SnakeGame() {
       // Check wall collision
       if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
         setGameState('gameover')
-        setHighScore((prev) => {
-          const newHigh = Math.max(prev, scoreRef.current)
-          localStorage.setItem('snake-high-score', String(newHigh))
-          return newHigh
-        })
+        updateHighScore(Math.max(highScoreRef.current, scoreRef.current))
         return prevSnake
       }
 
       // Check self collision
       if (newSnake.some((s) => s.x === head.x && s.y === head.y)) {
         setGameState('gameover')
-        setHighScore((prev) => {
-          const newHigh = Math.max(prev, scoreRef.current)
-          localStorage.setItem('snake-high-score', String(newHigh))
-          return newHigh
-        })
+        updateHighScore(Math.max(highScoreRef.current, scoreRef.current))
         return prevSnake
       }
 
