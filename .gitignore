@@ -57,3 +57,7 @@ server.log
 .zscripts/
 db/custom.db
 mini-services/
+
+# Cloudflare / OpenNext
+.open-next/
+.dev.vars
